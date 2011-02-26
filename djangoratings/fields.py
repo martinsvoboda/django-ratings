@@ -157,7 +157,7 @@ class RatingManager(object):
         if not user:
             kwargs['ip_address'] = ip_address
         
-        use_cookies = (self.field.allow_anonymous and self.field.use_cookies)
+        use_cookies = (self.field.allow_anonymous and self.field.use_cookies and is_anonymous)
         if use_cookies:
             defaults['cookie'] = datetime.now().strftime('%Y%m%d%H%M%S%f') # -> md5_hexdigest?
             # TODO: move 'vote-%d.%d.%s' to settings or something
