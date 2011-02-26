@@ -1,10 +1,13 @@
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
-from django.http import HttpResponse, Http404
+from django.http import HttpResponse, Http404, HttpResponseRedirect
 
 from exceptions import *
 from django.conf import settings
 from default_settings import RATINGS_VOTES_PER_IP
+from models import Vote
+from django.db.utils import IntegrityError
+from django.db import transaction
 
 class AddRatingView(object):
     def __call__(self, request, content_type_id, object_id, field_name, score):
@@ -122,3 +125,30 @@ class AddRatingFromModel(AddRatingView):
         
         return super(AddRatingFromModel, self).__call__(request, content_type.id,
                                                         object_id, field_name, score)
+
+
+def link_anonymous_ratings_with_user(request, redirect_to):
+    user = request.user
+    response = HttpResponseRedirect(redirect_to)
+    if not user.is_authenticated():
+        return response
+    
+    for cookie_key, cookie_value in filter(lambda item: item[0].startswith('vote-'), request.COOKIES.items()):
+        try:
+            content_type_id, object_id, key = cookie_key[5:].split('.')
+            response.delete_cookie(cookie_key)
+            sid = transaction.savepoint()
+            Vote.objects.filter(
+                content_type=content_type_id,
+                object_id = object_id,
+                key__startswith = key,
+                cookie = cookie_value,
+                user__isnull = True,
+            ).update(user=user)
+            transaction.savepoint_commit(sid)
+        except ValueError:
+            pass
+        except IntegrityError:
+            transaction.savepoint_rollback(sid)
+    
+    return response
